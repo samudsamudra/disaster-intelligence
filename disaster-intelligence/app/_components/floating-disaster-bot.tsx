@@ -4,7 +4,7 @@
 import { FormEvent, useState } from "react";
 import AssistantMessage from "./assistant-message";
 
-type BotEarthquake = {
+export type BotEarthquake = {
   magnitude: number;
   place: string;
   source: "BMKG" | "USGS";
@@ -16,7 +16,11 @@ type ChatMessage = {
   text: string;
 };
 
-function createFallbackReply(question: string, events: BotEarthquake[]) {
+function createFallbackReply(
+  question: string,
+  events: BotEarthquake[],
+  pageDetails: string,
+) {
   const prompt = question.toLowerCase();
   const strongest = [...events].sort(
     (a, b) => b.magnitude - a.magnitude
@@ -69,14 +73,17 @@ function createFallbackReply(question: string, events: BotEarthquake[]) {
 - Sumber: ${strongest.source}`;
   }
 
-  return "Saya bisa membantu membaca gempa terbaru, menjelaskan status risiko, atau memberi rekomendasi tindakan kesiapsiagaan.";
+  return `Saya bisa membantu membaca informasi pada halaman ini, menjelaskan status risiko, atau memberi rekomendasi tindakan kesiapsiagaan.
+
+**Informasi yang sedang dibaca:**
+${pageDetails}`;
 }
 
-export function FloatingDisasterBot({
-  events,
-}: {
-  events: BotEarthquake[];
-}) {
+import { useAssistantContext } from "./assistant-context";
+
+export function FloatingDisasterBot() {
+  const { pageContext } = useAssistantContext();
+  const { events, title, details } = pageContext;
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [sending, setSending] = useState(false);
@@ -115,6 +122,10 @@ export function FloatingDisasterBot({
         body: JSON.stringify({
           question: trimmed,
           events,
+          pageContext: {
+            title,
+            details,
+          },
         }),
       });
 
@@ -140,7 +151,7 @@ export function FloatingDisasterBot({
         ...current,
         {
           role: "bot",
-          text: createFallbackReply(trimmed, events),
+          text: createFallbackReply(trimmed, events, details),
         },
       ]);
     } finally {

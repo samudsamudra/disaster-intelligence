@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import * as maplibregl from "maplibre-gl";
 
 type Earthquake = {
@@ -26,9 +26,89 @@ type UserLocation = {
 
 const INDONESIA_CENTER: [number, number] = [118, -2];
 
-export function EarthquakeMap({ userLocation }: { userLocation: UserLocation | null }) {
+function focusCamera(map: maplibregl.Map, longitude: number, latitude: number) {
+  map.stop();
+  map.resize();
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+  map.flyTo({
+    center: [longitude, latitude],
+    zoom: 7,
+    bearing: 0,
+    pitch: 0,
+    padding: { top: 24, bottom: 24, left: 24, right: 24 },
+    duration: 900,
+  });
+}
+
+function formatEventTime(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(value));
+}
+
+function hasValidCoordinates(event: Earthquake) {
+  return Number.isFinite(event.longitude)
+    && Number.isFinite(event.latitude)
+    && event.longitude >= -180
+    && event.longitude <= 180
+    && event.latitude >= -90
+    && event.latitude <= 90;
+}
+
+function showEventPopup(
+  map: maplibregl.Map,
+  popupRef: MutableRefObject<maplibregl.Popup | null>,
+  event: Earthquake,
+) {
+  if (!hasValidCoordinates(event)) return;
+
+  const popupContent = document.createElement("div");
+  popupContent.className = "earthquake-popup";
+  const eyebrow = document.createElement("span");
+  const title = document.createElement("strong");
+  const place = document.createElement("p");
+  const details = document.createElement("small");
+
+  eyebrow.textContent = "GEMPA BUMI";
+  title.textContent = `Gempa M ${event.magnitude.toFixed(1)}`;
+  place.textContent = event.place || "Lokasi tidak diketahui";
+  details.textContent = `${formatEventTime(event.occurredAt)} WIB\n${event.source} · Kedalaman ${event.depthKm ?? "Tidak diketahui"} km\n${event.latitude.toFixed(4)}, ${event.longitude.toFixed(4)}`;
+  details.style.whiteSpace = "pre-line";
+  popupContent.append(eyebrow, title, place, details);
+
+  popupRef.current?.remove();
+  popupRef.current = new maplibregl.Popup({ anchor: "bottom", maxWidth: "240px", focusAfterOpen: false })
+    .setOffset(14)
+    .setLngLat([event.longitude, event.latitude])
+    .setDOMContent(popupContent)
+    .addTo(map);
+}
+
+export function EarthquakeMap({
+  userLocation,
+  onEventSelect,
+  selectedEvent,
+}: {
+  userLocation: UserLocation | null;
+  onEventSelect: (eventId: string) => void;
+  selectedEvent: Earthquake | null;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const onEventSelectRef = useRef(onEventSelect);
+  const selectedEventRef = useRef(selectedEvent);
+  const selectedFeatureIdRef = useRef<string | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  useEffect(() => {
+    onEventSelectRef.current = onEventSelect;
+  }, [onEventSelect]);
+
+  useEffect(() => {
+    selectedEventRef.current = selectedEvent;
+  }, [selectedEvent]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -66,6 +146,8 @@ export function EarthquakeMap({ userLocation }: { userLocation: UserLocation | n
     });
 
     mapRef.current = map;
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(containerRef.current);
 
     map.addControl(
       new maplibregl.NavigationControl({
@@ -121,27 +203,69 @@ export function EarthquakeMap({ userLocation }: { userLocation: UserLocation | n
         },
       });
 
+      map.addLayer({
+        id: "earthquake-selected-ring",
+        type: "circle",
+        source: "earthquakes",
+        paint: {
+          "circle-radius": 18,
+          "circle-color": "#ffffff",
+          "circle-opacity": 0,
+          "circle-stroke-color": "#e32626",
+          "circle-stroke-width": 3,
+          "circle-stroke-opacity": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            1,
+            0,
+          ],
+        },
+      });
+
+      function validCoordinates(event: Earthquake) {
+        return hasValidCoordinates(event);
+      }
+
+      function focusEvent(event: Earthquake) {
+        if (!validCoordinates(event)) return;
+
+        map.resize();
+        if (selectedFeatureIdRef.current) {
+          map.setFeatureState(
+            { source: "earthquakes", id: selectedFeatureIdRef.current },
+            { selected: false },
+          );
+        }
+
+        selectedFeatureIdRef.current = event.id;
+        map.setFeatureState(
+          { source: "earthquakes", id: event.id },
+          { selected: true },
+        );
+        focusCamera(map, event.longitude, event.latitude);
+        showEventPopup(map, popupRef, event);
+      }
+
       map.on("click", "earthquake-circles", (event) => {
         const feature = event.features?.[0];
         if (!feature || feature.geometry.type !== "Point") return;
 
-        const coordinates = [...feature.geometry.coordinates] as [number, number];
         const properties = feature.properties ?? {};
-        const popupContent = document.createElement("div");
-        const title = document.createElement("strong");
-        const place = document.createElement("p");
-        const details = document.createElement("small");
-
-        title.textContent = `Gempa M ${Number(properties.magnitude).toFixed(1)}`;
-        place.textContent = String(properties.place ?? "Lokasi tidak diketahui");
-        details.textContent = `Sumber: ${String(properties.source)}\nKedalaman: ${properties.depthKm ?? "Tidak diketahui"} km`;
-        details.style.whiteSpace = "pre-line";
-        popupContent.append(title, place, details);
-
-        new maplibregl.Popup()
-          .setLngLat(coordinates)
-          .setDOMContent(popupContent)
-          .addTo(map);
+        const eventId = String(feature.id ?? "");
+        onEventSelectRef.current(eventId);
+        const coordinates = [...feature.geometry.coordinates] as [number, number];
+        map.resize();
+        focusCamera(map, coordinates[0], coordinates[1]);
+        showEventPopup(map, popupRef, {
+          id: eventId,
+          source: String(properties.source) as Earthquake["source"],
+          magnitude: Number(properties.magnitude),
+          place: String(properties.place ?? ""),
+          longitude: coordinates[0],
+          latitude: coordinates[1],
+          depthKm: properties.depthKm == null ? null : Number(properties.depthKm),
+          occurredAt: String(properties.occurredAt),
+        });
       });
 
       map.on("mouseenter", "earthquake-circles", () => {
@@ -169,7 +293,7 @@ export function EarthquakeMap({ userLocation }: { userLocation: UserLocation | n
 
           const geojson: GeoJSON.FeatureCollection<GeoJSON.Point> = {
             type: "FeatureCollection",
-            features: result.data.map((earthquake) => ({
+            features: result.data.filter(hasValidCoordinates).map((earthquake) => ({
               type: "Feature",
               id: earthquake.id,
               geometry: {
@@ -190,31 +314,62 @@ export function EarthquakeMap({ userLocation }: { userLocation: UserLocation | n
             | maplibregl.GeoJSONSource
             | undefined;
           source?.setData(geojson);
+          const currentEvent = selectedEventRef.current;
+          if (currentEvent && validCoordinates(currentEvent) && selectedFeatureIdRef.current !== currentEvent.id) {
+            window.requestAnimationFrame(() => focusEvent(currentEvent));
+          }
         } catch (error) {
           console.error("Earthquake map error:", error);
         }
       }
 
+      const currentEvent = selectedEventRef.current;
+      if (currentEvent) focusEvent(currentEvent);
       await refreshEarthquakes();
       const interval = window.setInterval(refreshEarthquakes, 60_000);
       map.once("remove", () => window.clearInterval(interval));
     });
 
+    const popupAtSetup = popupRef.current;
     return () => {
+      resizeObserver.disconnect();
+      popupAtSetup?.remove();
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !userLocation) return;
+    if (!mapRef.current || !userLocation || selectedEventRef.current) return;
 
+    mapRef.current.resize();
     mapRef.current.flyTo({
       center: [userLocation.longitude, userLocation.latitude],
       zoom: 7,
       essential: true,
     });
   }, [userLocation]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedEvent || !map.isStyleLoaded()) return;
+
+    const event = selectedEvent;
+    if (!hasValidCoordinates(event)) return;
+
+    map.resize();
+    if (selectedFeatureIdRef.current) {
+      map.setFeatureState(
+        { source: "earthquakes", id: selectedFeatureIdRef.current },
+        { selected: false },
+      );
+    }
+
+    selectedFeatureIdRef.current = event.id;
+    map.setFeatureState({ source: "earthquakes", id: event.id }, { selected: true });
+    focusCamera(map, event.longitude, event.latitude);
+    showEventPopup(map, popupRef, event);
+  }, [selectedEvent]);
 
   return (
     <div className="earthquake-map-wrapper">

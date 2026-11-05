@@ -39,7 +39,7 @@
             ),
 
             strong: ({ children }) => (
-                <strong className="font-semibold text-white">
+                <strong className="font-semibold text-black">
                 {children}
                 </strong>
             ),

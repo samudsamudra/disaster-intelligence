@@ -1,8 +1,10 @@
 "use client";
 
+import { Sidebar } from "./sidebar";
+
 import { useEffect, useState } from "react";
 import { EarthquakeMap } from "./earthquake-map";
-import { FloatingDisasterBot } from "./floating-disaster-bot";
+import { useAssistantContext } from "./assistant-context";
 
 type Earthquake = {
   id: string;
@@ -125,11 +127,21 @@ function Mark({ name }: { name: "grid" | "map" | "bell" | "chevron" | "layers" |
 }
 
 export function DashboardShell() {
+  const { setPageContext } = useAssistantContext();
   const [feed, setFeed] = useState<FeedState>(initialFeedState);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationState, setLocationState] = useState<LocationState>("requesting");
   const [feedPage, setFeedPage] = useState(0);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPageContext({
+      title: "Ikhtisar nasional",
+      details: "Data gempa BMKG dan USGS yang ditampilkan pada ikhtisar nasional.",
+      events: feed.events,
+    });
+  }, [feed.events, setPageContext]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,6 +212,18 @@ export function DashboardShell() {
   const pageCount = Math.max(1, Math.ceil(recentEvents.length / pageSize));
   const pagedEvents = recentEvents.slice(feedPage * pageSize, (feedPage + 1) * pageSize);
 
+  function selectEvent(eventId: string) {
+    const eventIndex = recentEvents.findIndex((event) => event.id === eventId);
+    if (eventIndex < 0) return;
+
+    setSelectedEventId(eventId);
+    setFeedPage(Math.floor(eventIndex / pageSize));
+    document.getElementById("local-monitoring")?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }
+
   function requestLocation() {
     if (!navigator.geolocation) {
       setLocationState("unsupported");
@@ -222,13 +246,9 @@ export function DashboardShell() {
 
   return <div className="dashboard-shell">
     <a className="skip-link" href="#main-content">Lewati ke konten utama</a>
-    <aside className="sidebar" aria-label="Navigasi utama">
-      <a className="brand" href="#national-overview" aria-label="PantauBencana — beranda"><span className="brand-mark"><span /><span /><span /></span><span>Pantau<span className="brand-accent">Bencana</span></span></a>
-      <nav className="primary-nav"><a className="nav-link active" href="#national-overview" aria-current="page"><Mark name="grid" /> Ikhtisar nasional</a><a className="nav-link" href="#local-monitoring"><Mark name="map" /> Pantau wilayah</a><a className="nav-link" href="/alerts"><Mark name="bell" /> Peringatan</a></nav>
-      <div className="sidebar-footer"><div className="data-status"><span className="status-dot" /> Sumber data {sourceStatus.toLowerCase()}</div><p>Data kejadian diperbarui dari sumber resmi.</p></div>
-    </aside>
+    <Sidebar active="home" />
     <main id="main-content" className="dashboard-main">
-      <header className="topbar"><div><p className="eyebrow">INDONESIA · MONITORING RISIKO</p><h1>Selamat datang kembali.</h1></div><div className="topbar-actions"><div className="freshness"><span className="status-dot" /> Terakhir diperbarui: {freshness}</div><button className="icon-button" type="button" aria-label="Buka notifikasi"><Mark name="bell" /><span className="notification-dot" /></button></div></header>
+      <header className="topbar"><div><p className="eyebrow">INDONESIA · MONITORING RISIKO</p><h1>Selamat datang kembali.</h1></div><div className="topbar-actions"><div className="freshness"><span className="status-dot" /> Terakhir diperbarui: {freshness}</div></div></header>
       <section className="hero" id="national-overview" aria-labelledby="overview-title"><div className="hero-copy"><p className="eyebrow">IKHTISAR NASIONAL</p><h2 id="overview-title">Satu pandangan untuk kesiapsiagaan yang lebih cepat.</h2><p>Ruang kerja terpadu untuk memantau laporan kejadian, kondisi wilayah, dan peringatan resmi di seluruh Indonesia.</p></div><div className="source-card"><div className="source-icon"><Mark name="layers" /></div><div><span>Sumber data gempa</span><strong>{sourceStatus}</strong></div><p>{feed.error ?? `${feed.availableSources} sumber resmi terhubung.`}</p></div></section>
       <section className="indicators" aria-label="Ringkasan indikator">
         <article className="indicator"><span>Gempa terpantau</span><strong>{loading ? "—" : feed.events.length}</strong><small>24 jam terakhir</small></article>
@@ -236,18 +256,16 @@ export function DashboardShell() {
         <article className="indicator"><span>Status data</span><strong>{loading ? "—" : feed.status === "available" ? "OK" : "!"}</strong><small>{loading ? "memuat data" : sourceStatus}</small></article>
       </section>
       <div className="content-grid">
-        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Status wilayah</span><strong>{locationState === "requesting" ? "Meminta lokasi..." : risk ? riskLabel(risk.level) : "Lokasi diperlukan"}</strong></div><p>{locationState === "denied" || locationState === "unsupported" ? "Izinkan akses lokasi untuk membaca ancaman di sekitar Anda." : risk?.nearest ? `Gempa terdekat ${risk.nearest.distanceKm.toFixed(0)} km dari lokasi Anda.` : "Belum ada ancaman gempa dalam radius pemantauan."}</p>{locationState !== "granted" && <button className="location-button" type="button" onClick={requestLocation}>Izinkan akses lokasi</button>}</div><EarthquakeMap userLocation={userLocation} /><p className="panel-caption">Status berdasarkan gempa terpantau dalam radius 200 km dari lokasi Anda. Lokasi diproses hanya di perangkat ini.</p></section>
+        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Status wilayah</span><strong>{locationState === "requesting" ? "Meminta lokasi..." : risk ? riskLabel(risk.level) : "Lokasi diperlukan"}</strong></div><p>{locationState === "denied" || locationState === "unsupported" ? "Izinkan akses lokasi untuk membaca ancaman di sekitar Anda." : risk?.nearest ? `Gempa terdekat ${risk.nearest.distanceKm.toFixed(0)} km dari lokasi Anda.` : "Belum ada ancaman gempa dalam radius pemantauan."}</p>{locationState !== "granted" && <button className="location-button" type="button" onClick={requestLocation}>Izinkan akses lokasi</button>}</div><EarthquakeMap userLocation={userLocation} onEventSelect={selectEvent} selectedEvent={feed.events.find((event) => event.id === selectedEventId) ?? null} /><p className="panel-caption">Sentuh titik merah atau pilih “Lihat” untuk memusatkan peta ke kejadian. Status wilayah berdasarkan gempa dalam radius 200 km.</p></section>
         <section className="feed-panel" id="alerts" aria-labelledby="feed-title"><div className="section-heading"><div><p className="eyebrow">AKTIVITAS TERBARU</p><h2 id="feed-title">Gempa bumi</h2></div><span className="demo-label">{feed.status === "partial" ? "DATA SEBAGIAN" : "DATA LANGSUNG"}</span></div>
           <div className="feed-list" aria-live="polite">
             {loading && <p className="panel-caption">Memuat data gempa...</p>}
             {!loading && feed.error && <p className="panel-caption">{feed.error}</p>}
-            {!loading && !feed.error && pagedEvents.length === 0 && <p className="panel-caption">Belum ada gempa yang terpantau.</p>}
             {!loading && !feed.error && pagedEvents.length === 0 && <p className="panel-caption">Belum ada kejadian yang terpantau.</p>}
-            {!loading && !feed.error && pagedEvents.map((event) => <article className="event" key={event.id}><span className={`event-icon${event.magnitude >= 5 ? " urgent" : ""}`}><Mark name="bell" /></span><div className="event-copy"><div><strong>M {formatMagnitude(event.magnitude)}</strong><span className={`level${event.magnitude >= 5 ? " urgent" : ""}`}>{event.source}</span></div><p>{event.place}</p><time dateTime={event.occurredAt}>{formatEventTime(event.occurredAt)} WIB</time></div></article>)}
+            {!loading && !feed.error && pagedEvents.map((event) => <article className={`event${selectedEventId === event.id ? " selected" : ""}`} id={`event-${event.id}`} key={event.id} aria-label={`Gempa M ${formatMagnitude(event.magnitude)} di ${event.place}`} role="group" onClick={() => selectEvent(event.id)}><span className={`event-icon${event.magnitude >= 5 ? " urgent" : ""}`}><Mark name="bell" /></span><div className="event-copy"><div><strong>M {formatMagnitude(event.magnitude)}</strong><span className={`level${event.magnitude >= 5 ? " urgent" : ""}`}>{event.source}</span></div><p>{event.place}</p><time dateTime={event.occurredAt}>{formatEventTime(event.occurredAt)} WIB · Kedalaman {event.depthKm ?? "—"} km</time></div><button className="event-open" type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); selectEvent(event.id); }}>Lihat di peta</button></article>)}
           </div><div className="feed-pagination" aria-label="Navigasi halaman aktivitas"><button type="button" disabled={feedPage === 0} onClick={() => setFeedPage((page) => page - 1)}>Sebelumnya</button><span>Halaman {Math.min(feedPage + 1, pageCount)} dari {pageCount}</span><button type="button" disabled={feedPage >= pageCount - 1} onClick={() => setFeedPage((page) => page + 1)}>Berikutnya</button></div><a className="feed-link" href="/alerts">Buka semua peringatan</a></section>
       </div>
       <footer className="dashboard-footer">PantauBencana · Data gempa BMKG dan USGS · <span>Terakhir diperbarui: {freshness}.</span></footer>
     </main>
-    <FloatingDisasterBot events={feed.events} />
   </div>;
 }

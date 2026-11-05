@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
+import { AssistantContextProvider } from "./_components/assistant-context";
+import { FloatingDisasterBot } from "./_components/floating-disaster-bot";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +23,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="id" data-scroll-behavior="smooth" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AssistantContextProvider>
+          {children}
+          <FloatingDisasterBot />
+        </AssistantContextProvider>
+      </body>
     </html>
   );
 }
