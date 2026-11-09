@@ -2,7 +2,7 @@
 
 import { Sidebar } from "./sidebar";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { EarthquakeMap } from "./earthquake-map";
 import { useAssistantContext } from "./assistant-context";
 
@@ -46,7 +46,7 @@ type UserLocation = {
   longitude: number;
 };
 
-type LocationState = "requesting" | "granted" | "denied" | "unsupported";
+type LocationState = "requesting" | "granted" | "denied" | "unsupported" | "prompt" | "unavailable";
 type LocalRisk = "safe" | "warning" | "danger";
 
 const initialFeedState: FeedState = {
@@ -186,9 +186,9 @@ export function DashboardShell() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-
+  const readDeviceLocation = useCallback(() => {
+    if (!navigator.geolocation) { setLocationState("unsupported"); return; }
+    setLocationState("requesting");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setUserLocation({
@@ -197,10 +197,31 @@ export function DashboardShell() {
         });
         setLocationState("granted");
       },
-      () => setLocationState("denied"),
+      (reason) => setLocationState(reason.code === 1 ? "denied" : "unavailable"),
       { enableHighAccuracy: false, maximumAge: 300_000, timeout: 10_000 },
     );
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    let permission: PermissionStatus | undefined;
+    if (!window.isSecureContext || !navigator.geolocation || !navigator.permissions) {
+      queueMicrotask(() => { if (mounted) setLocationState(!window.isSecureContext || !navigator.geolocation ? "unsupported" : "prompt"); });
+      return () => { mounted = false; };
+    }
+    const updatePermission = () => {
+      if (!mounted || !permission) return;
+      if (permission.state === "granted") readDeviceLocation();
+      else { setUserLocation(null); setLocationState(permission.state === "denied" ? "denied" : "prompt"); }
+    };
+    navigator.permissions.query({ name: "geolocation" }).then(result => {
+      if (!mounted) return;
+      permission = result;
+      permission.addEventListener("change", updatePermission);
+      updatePermission();
+    }).catch(() => { if (mounted) setLocationState("prompt"); });
+    return () => { mounted = false; permission?.removeEventListener("change", updatePermission); };
+  }, [readDeviceLocation]);
 
   const freshness = feed.checkedAt ? formatEventTime(feed.checkedAt) : "belum tersedia";
   const sourceStatus = sourceLabel(feed.status);
@@ -225,23 +246,7 @@ export function DashboardShell() {
   }
 
   function requestLocation() {
-    if (!navigator.geolocation) {
-      setLocationState("unsupported");
-      return;
-    }
-
-    setLocationState("requesting");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setUserLocation({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        });
-        setLocationState("granted");
-      },
-      () => setLocationState("denied"),
-      { enableHighAccuracy: false, maximumAge: 300_000, timeout: 10_000 },
-    );
+    readDeviceLocation();
   }
 
   return <div className="dashboard-shell">
@@ -256,7 +261,7 @@ export function DashboardShell() {
         <article className="indicator"><span>Status data</span><strong>{loading ? "—" : feed.status === "available" ? "OK" : "!"}</strong><small>{loading ? "memuat data" : sourceStatus}</small></article>
       </section>
       <div className="content-grid">
-        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Status wilayah</span><strong>{locationState === "requesting" ? "Meminta lokasi..." : risk ? riskLabel(risk.level) : "Lokasi diperlukan"}</strong></div><p>{locationState === "denied" || locationState === "unsupported" ? "Izinkan akses lokasi untuk membaca ancaman di sekitar Anda." : risk?.nearest ? `Gempa terdekat ${risk.nearest.distanceKm.toFixed(0)} km dari lokasi Anda.` : "Belum ada ancaman gempa dalam radius pemantauan."}</p>{locationState !== "granted" && <button className="location-button" type="button" onClick={requestLocation}>Izinkan akses lokasi</button>}</div><EarthquakeMap userLocation={userLocation} onEventSelect={selectEvent} selectedEvent={feed.events.find((event) => event.id === selectedEventId) ?? null} /><p className="panel-caption">Sentuh titik merah atau pilih “Lihat” untuk memusatkan peta ke kejadian. Status wilayah berdasarkan gempa dalam radius 200 km.</p></section>
+        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Status wilayah</span><strong>{locationState === "requesting" ? "Mencari lokasi..." : risk ? riskLabel(risk.level) : "Lokasi belum tersedia"}</strong></div><p>{locationState === "denied" ? "Izin lokasi diblokir di browser. Ubah izin situs untuk membaca kondisi wilayah." : locationState === "unavailable" ? "Posisi perangkat belum ditemukan. Periksa layanan lokasi, lalu coba lagi." : locationState === "unsupported" ? "Browser atau koneksi ini belum mendukung akses lokasi." : locationState === "prompt" ? "Aktifkan lokasi sekali untuk melihat kondisi di sekitar Anda." : risk?.nearest ? `Gempa terdekat ${risk.nearest.distanceKm.toFixed(0)} km dari lokasi Anda.` : risk ? "Belum ada ancaman gempa dalam radius pemantauan." : "Kondisi sekitar belum dapat dihitung tanpa lokasi."}</p>{locationState !== "granted" && locationState !== "requesting" && locationState !== "unsupported" && <button className="location-button" type="button" onClick={requestLocation}>{locationState === "prompt" ? "Aktifkan lokasi saya" : "Coba lagi"}</button>}</div><EarthquakeMap userLocation={userLocation} onEventSelect={selectEvent} selectedEvent={feed.events.find((event) => event.id === selectedEventId) ?? null} /><p className="panel-caption">Sentuh titik merah atau pilih “Lihat” untuk memusatkan peta ke kejadian. Status wilayah berdasarkan gempa dalam radius 200 km.</p></section>
         <section className="feed-panel" id="alerts" aria-labelledby="feed-title"><div className="section-heading"><div><p className="eyebrow">AKTIVITAS TERBARU</p><h2 id="feed-title">Gempa bumi</h2></div><span className="demo-label">{feed.status === "partial" ? "DATA SEBAGIAN" : "DATA LANGSUNG"}</span></div>
           <div className="feed-list" aria-live="polite">
             {loading && <p className="panel-caption">Memuat data gempa...</p>}

@@ -1,3 +1,6 @@
+"use client";
+
+import { useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 
 const items = [
@@ -9,9 +12,23 @@ const items = [
 ];
 
 export function Sidebar({ active }: { active: string }) {
+  const navRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav || !window.matchMedia("(max-width: 1049px)").matches) return;
+    try {
+      const saved = Number(sessionStorage.getItem("pantau-nav-scroll") ?? 0);
+      if (Number.isFinite(saved)) nav.scrollLeft = saved;
+    } catch {}
+  }, []);
+  const saveScroll = () => {
+    const nav = navRef.current;
+    if (!nav || !window.matchMedia("(max-width: 1049px)").matches) return;
+    try { sessionStorage.setItem("pantau-nav-scroll", String(nav.scrollLeft)); } catch {}
+  };
   return <aside className="sidebar" aria-label="Navigasi utama">
     <Link className="brand" href="/" aria-label="PantauBencana — beranda"><span className="brand-mark"><span /><span /><span /></span><span>Pantau<span className="brand-accent">Bencana</span></span></Link>
-    <nav className="primary-nav">{items.map((item) => <Link key={item.id} className={`nav-link${active === item.id ? " active" : ""}`} href={item.href} aria-current={active === item.id ? "page" : undefined}><svg className="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={item.path} /></svg>{item.label}</Link>)}</nav>
+    <nav ref={navRef} className="primary-nav" onScroll={saveScroll} onClickCapture={saveScroll}>{items.map((item) => <Link key={item.id} className={`nav-link${active === item.id ? " active" : ""}`} href={item.href} aria-current={active === item.id ? "page" : undefined}><svg className="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={item.path} /></svg>{item.label}</Link>)}</nav>
     <div className="sidebar-footer"><div className="data-status"><span className="status-dot" /> Sumber resmi</div><p>Status ketersediaan data ditampilkan pada setiap halaman.</p></div>
   </aside>;
 }

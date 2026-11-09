@@ -32,7 +32,7 @@ function focusCamera(map: maplibregl.Map, longitude: number, latitude: number) {
   map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
   map.flyTo({
     center: [longitude, latitude],
-    zoom: 7,
+    zoom: 12,
     bearing: 0,
     pitch: 0,
     padding: { top: 24, bottom: 24, left: 24, right: 24 },
@@ -101,6 +101,7 @@ export function EarthquakeMap({
   const selectedEventRef = useRef(selectedEvent);
   const selectedFeatureIdRef = useRef<string | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
     onEventSelectRef.current = onEventSelect;
@@ -334,18 +335,36 @@ export function EarthquakeMap({
     return () => {
       resizeObserver.disconnect();
       popupAtSetup?.remove();
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !userLocation || selectedEventRef.current) return;
-
-    mapRef.current.resize();
-    mapRef.current.flyTo({
+    const map = mapRef.current;
+    if (!map) return;
+    if (!userLocation || !Number.isFinite(userLocation.latitude) || !Number.isFinite(userLocation.longitude)) {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      return;
+    }
+    if (!userMarkerRef.current) {
+      const element = document.createElement("div");
+      element.className = "user-location-pin";
+      element.setAttribute("aria-label", "Lokasi Anda");
+      element.setAttribute("title", "Lokasi Anda");
+      userMarkerRef.current = new maplibregl.Marker({ element, anchor: "bottom" })
+        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .addTo(map);
+    }
+    userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
+    if (selectedEventRef.current) return;
+    map.resize();
+    map.flyTo({
       center: [userLocation.longitude, userLocation.latitude],
-      zoom: 7,
+      zoom: 13,
       essential: true,
     });
   }, [userLocation]);
@@ -373,6 +392,7 @@ export function EarthquakeMap({
 
   return (
     <div className="earthquake-map-wrapper">
+      {userLocation && <button type="button" className="climate-map-view" onClick={() => mapRef.current?.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 13, essential: true })}>Kembali ke lokasi saya</button>}
       <div
         ref={containerRef}
         className="earthquake-map"

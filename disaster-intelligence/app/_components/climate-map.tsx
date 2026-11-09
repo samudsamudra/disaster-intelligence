@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { Hotspot, WeatherData } from "../_lib/api/climate";
+import { formatIndonesiaTime } from "../_lib/indonesia-time";
 
 export type ClimateLayer = "rainfall" | "hotspot" | "drought" | "temperature" | "wind";
 
@@ -23,7 +24,11 @@ export function ClimateMap({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const timezoneRef = useRef("Asia/Jakarta");
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const cameraKeyRef = useRef("");
   const [ready, setReady] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -93,7 +98,7 @@ export function ClimateMap({
       const properties = feature.properties ?? {};
       new maplibregl.Popup({ offset: 12 })
         .setLngLat(feature.geometry.coordinates as [number, number])
-        .setText(`NASA FIRMS · ${String(properties.sensor ?? "VIIRS")} · Waktu UTC: ${String(properties.acquiredAt ?? "Tidak tersedia")} · Confidence: ${String(properties.confidence ?? "Tidak tersedia")} · Satelit: ${String(properties.satellite ?? "Tidak tersedia")} · Deteksi satelit bukan kebakaran terkonfirmasi.`)
+        .setText(`NASA FIRMS · ${String(properties.sensor ?? "VIIRS")} · ${formatIndonesiaTime(String(properties.acquiredAt ?? ""), timezoneRef.current)} · Keyakinan: ${String(properties.confidence ?? "Tidak tersedia")} · Satelit: ${String(properties.satellite ?? "Tidak tersedia")} · Deteksi satelit bukan kebakaran terkonfirmasi.`)
         .addTo(map);
     });
     map.on("mouseenter", "climate-hotspots", () => { map.getCanvas().style.cursor = "pointer"; });
@@ -101,6 +106,8 @@ export function ClimateMap({
     });
 
     return () => {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -121,9 +128,26 @@ export function ClimateMap({
     });
     const weatherSource = map.getSource("climate-weather-location") as maplibregl.GeoJSONSource | undefined;
     const location = weather?.location;
+    timezoneRef.current = location?.timezone ?? "Asia/Jakarta";
+    const hasLocation = location != null && Number.isFinite(location.latitude) && Number.isFinite(location.longitude) && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180;
+    if (hasLocation && location) {
+      if (!userMarkerRef.current) {
+        const element = document.createElement("div");
+        element.className = "user-location-pin";
+        element.setAttribute("aria-label", "Lokasi Anda");
+        element.setAttribute("title", "Lokasi Anda");
+        userMarkerRef.current = new maplibregl.Marker({ element, anchor: "bottom" })
+          .setLngLat([location.longitude, location.latitude])
+          .addTo(map);
+      }
+      userMarkerRef.current.setLngLat([location.longitude, location.latitude]);
+    } else {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+    }
     weatherSource?.setData({
       type: "FeatureCollection",
-      features: location?.latitude != null && location.longitude != null && Number.isFinite(location.latitude) && Number.isFinite(location.longitude) && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180 ? [{
+      features: hasLocation && location ? [{
         type: "Feature",
         geometry: { type: "Point", coordinates: [location.longitude, location.latitude] },
         properties: {},
@@ -132,13 +156,18 @@ export function ClimateMap({
     if (map.getLayer("climate-hotspots")) map.setLayoutProperty("climate-hotspots", "visibility", showHotspots ? "visible" : "none");
     if (map.getLayer("climate-weather-location")) map.setLayoutProperty("climate-weather-location", "visibility", showWeather ? "visible" : "none");
     map.resize();
-    if (showHotspots) map.fitBounds([[95, -11], [141, 6]], { padding: 30, duration: 400 });
-    if (showWeather && location?.longitude != null && location.latitude != null && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180) map.easeTo({ center: [location.longitude, location.latitude], zoom: 10 });
-  }, [hotspots, showHotspots, showWeather, weather, ready]);
+    const cameraKey = `${showHotspots}:${showOverview}:${location?.latitude ?? ""}:${location?.longitude ?? ""}`;
+    if (cameraKeyRef.current !== cameraKey) {
+      cameraKeyRef.current = cameraKey;
+      if (hasLocation && location && (!showOverview || !showHotspots)) map.easeTo({ center: [location.longitude, location.latitude], zoom: 13, duration: 500 });
+      else if (showHotspots || showOverview) map.fitBounds([[95, -11], [141, 6]], { padding: 30, duration: 500 });
+    }
+  }, [hotspots, showHotspots, showWeather, weather, ready, showOverview]);
 
   return (
     <div className="climate-map-wrapper">
       <div ref={containerRef} className="climate-map" aria-label={`Peta Pantau Iklim, layer ${activeLayer}`} />
+      {showHotspots && weather?.location && <button type="button" className="climate-map-view" onClick={() => setShowOverview((current) => !current)}>{showOverview ? "Kembali ke lokasi saya" : "Lihat seluruh hotspot"}</button>}
       {(activeLayer === "drought" || (showHotspots ? hotspots.length === 0 : !showWeather)) && <div className="climate-map-empty" role="status">
         <strong>Layer belum tersedia</strong>
         <span>{activeLayer === "drought" ? "Sumber kekeringan belum terintegrasi." : showHotspots ? "Belum ada titik untuk ditampilkan. Periksa status NASA FIRMS dan periode di halaman ini." : "Prakiraan wilayah belum tersedia."}</span>

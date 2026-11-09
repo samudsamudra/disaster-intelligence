@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+.assistant-markdown { color: #171717; }
+.assistant-markdown :is(h1, h2, h3, h4, h5, h6, strong, em, th, td) { color: #171717; }
+.primary-nav { overflow-anchor: none; scroll-behavior: auto; }
+.weather-location-prompt { padding: 16px 0; }
+.weather-location-prompt h2 { font-size: 20px; }
+.user-location-pin { position: relative; width: 36px; height: 40px; }
+.user-location-pin::before { content: ""; position: absolute; top: 2px; left: 4px; width: 28px; height: 28px; border: 3px solid white; border-radius: 50% 50% 50% 0; background: #2563eb; box-shadow: 0 2px 12px #000b; transform: rotate(-45deg); }
+.user-location-pin::after { content: ""; position: absolute; top: 12px; left: 14px; width: 8px; height: 8px; border-radius: 50%; background: white; }
+.climate-map-view { position: absolute; z-index: 2; left: 12px; top: 12px; padding: 8px 11px; border: 1px solid #444; color: white; background: #111e; font-size: 11px; cursor: pointer; }
+.weather-card { display: grid; grid-template-columns: minmax(105px, 150px) minmax(0, 1fr); gap: 18px; align-items: center; }
+.weather-card-icon { display: flex; min-width: 0; min-height: 164px; padding: 12px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--border); background: #151010; text-align: center; }
+.weather-glyph { display: block; width: min(100%, 112px); height: auto; aspect-ratio: 1; flex: 0 0 auto; }
+.weather-card-icon small { display: block; width: 100%; margin: 0; color: var(--muted); font-size: 11px; font-style: normal; line-height: 1.3; text-align: center; white-space: nowrap; }
+.weather-card-details h2 { margin: 4px 0 10px; font-size: clamp(18px, 3vw, 25px); }
+.weather-card-details .eyebrow { color: #fca5a5; font-size: 11px; letter-spacing: .08em; line-height: 1.4; }
+.weather-card-details .weather-place { margin: 10px 0 8px; padding-left: 10px; border-left: 2px solid var(--red); color: var(--text); font-size: 14px; font-weight: 700; line-height: 1.4; }
+.weather-place-source { display: inline-block; margin: 0 0 8px 12px; color: var(--muted); font-size: 11px; text-decoration: underline; }
+.weather-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
+.weather-facts div { padding: 7px 9px; border-left: 2px solid var(--red); background: #181818; }
+.weather-facts dt { color: var(--muted); font-size: 11px; }
+.weather-facts dd { margin: 2px 0 0; color: var(--text); font-size: 15px; font-weight: 700; }
+.firms-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.firms-summary div { padding: 11px; border: 1px solid var(--border); background: #141414; }
+.firms-summary dt { margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+.firms-summary dd { margin: 0; color: var(--text); font-size: 12px; font-weight: 650; line-height: 1.5; }
+.firms-technical { margin: 8px 0 14px; color: var(--muted); font-size: 12px; }
+.firms-technical summary { cursor: pointer; color: var(--text); }
+@media (max-width: 680px) { .weather-card { grid-template-columns: 94px minmax(0, 1fr); gap: 12px; }.weather-card-icon { min-height: 130px; padding: 6px; }.weather-glyph { width: 78px; }.weather-card-icon small { font-size: 10px; }.weather-facts { gap: 6px; }.weather-facts div { padding: 6px; }.firms-summary { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .climate-main .topbar { flex-direction: column; gap: 10px; } .climate-status { flex-wrap: wrap; } .climate-indicator strong { overflow-wrap: anywhere; } }
+
 .team-content { padding: 28px; }
 .campus-logos, .team-members { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .campus-card, .team-members article { padding: 24px; border: 1px solid var(--border); background: #111; }
@@ -27,7 +57,10 @@
 .climate-source-note strong { color: var(--muted); font-size: 10px; letter-spacing: .12em; }
 .climate-source-note span { margin-top: 6px; color: var(--text); font-size: 14px; font-weight: 700; }
 .climate-source-note p { margin-top: 7px; color: var(--muted); font-size: 11px; }
-.climate-indicators { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin-bottom: 18px; border: 1px solid var(--border); background: var(--border); }
+.climate-source-note button { margin-top: 12px; padding: 10px 15px; border: 1px solid var(--red); border-radius: 4px; color: #fff; background: #901e24; font-size: 13px; font-weight: 700; cursor: pointer; }
+.climate-source-note button:hover, .climate-source-note button:focus-visible { background: #b3262d; outline: 2px solid #f8717155; outline-offset: 2px; }
+.climate-source-note button:disabled { opacity: .55; cursor: wait; }
+.climate-indicators { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-bottom: 18px; border: 1px solid var(--border); background: var(--border); }
 .climate-indicator { min-width: 0; padding: 13px; border: 0; color: var(--muted); background: var(--surface); text-align: left; cursor: pointer; }
 .climate-indicator:hover, .climate-indicator:focus-visible, .climate-indicator.active { color: var(--text); background: #1b1111; outline: none; }
 .climate-indicator.active { box-shadow: inset 0 -3px 0 var(--red); }
@@ -37,9 +70,9 @@
 .climate-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 18px; }
 .climate-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .climate-controls > div { display: flex; flex-wrap: wrap; gap: 5px; }
-.climate-controls button, .climate-controls select { padding: 7px 9px; border: 1px solid var(--border); color: var(--muted); background: #0b0b0b; font-size: 10px; cursor: pointer; }
+.climate-controls button, .climate-controls select { min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); color: var(--text); background: #0b0b0b; font-size: 12px; cursor: pointer; }
 .climate-controls button:hover, .climate-controls button:focus-visible, .climate-controls button.active { border-color: var(--red); color: var(--text); background: #1b1111; outline: none; }
-.climate-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; }
+.climate-controls label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
 .climate-controls select { min-width: 132px; }
 .climate-map-wrapper { position: relative; width: 100%; height: 480px; overflow: hidden; border: 1px solid #292929; background: #111; }
 .climate-map { width: 100%; height: 100%; }
@@ -47,6 +80,7 @@
 .climate-map .maplibregl-ctrl-group button { filter: invert(1); }
 .climate-map-empty { position: absolute; left: 50%; top: 50%; display: grid; gap: 5px; width: min(270px, calc(100% - 32px)); padding: 14px; border: 1px solid var(--border); color: var(--text); background: #090909eF; transform: translate(-50%, -50%); text-align: center; }
 .climate-map-empty span { color: var(--muted); font-size: 11px; }
+.climate-main .panel-caption { font-size: 12px; line-height: 1.6; }
 .climate-detail { align-self: start; padding: 20px; border: 1px solid var(--border); background: var(--surface); }
 .climate-detail h2 { margin: 0 0 8px; font-size: 20px; }
 .climate-recommendation, .climate-data-source { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
@@ -66,7 +100,7 @@
 .climate-observation p, .climate-observation small { display: block; margin: 8px 0 0; color: var(--text); font-size: 12px; line-height: 1.5; }
 .climate-observation small { color: var(--muted); font-size: 10px; }
 
-.earthquake-map-wrapper { width: 100%; height: 520px; overflow: hidden; border: 1px solid #292929; background: #111; }
+.earthquake-map-wrapper { position: relative; width: 100%; height: 520px; overflow: hidden; border: 1px solid #292929; background: #111; }
 .earthquake-map { width: 100%; height: 100%; }
 .earthquake-map .maplibregl-ctrl-group { border: 1px solid #333; border-radius: 0; background: #111; }
 .earthquake-map .maplibregl-ctrl-group button { filter: invert(1); border: 1px solid transparent; }
