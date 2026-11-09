@@ -371,3 +371,5 @@ Hak kepemilikan, atribusi, serta ketentuan penggunaan data tetap mengikuti masin
 ---
 
 **PantauBencana — Making Disaster Information More Accessible, Understandable, and Actionable.**
+
+Dev: Yohanes Capelliou Samudra
