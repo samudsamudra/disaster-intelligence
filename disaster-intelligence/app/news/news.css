@@ -67,3 +67,21 @@
 .news-card-footer a { color:#ff7777; }
 .news-shell .eyebrow,.news-header-mark,.news-card-meta,.news-card-footer,.news-footer,.news-state p { color:var(--muted); }
 .news-skeleton .news-image,.news-skeleton .news-card-body span { background:linear-gradient(100deg,#1b1b1b 30%,#303030 50%,#1b1b1b 70%); background-size:200% 100%; }
+.news-image-fallback { position:relative; display:grid; place-items:center; padding:20px; background:radial-gradient(circle at 80% 20%,#2a1718,#151515 65%); }
+.news-image-fallback::after { position:absolute; inset:0; border-top:2px solid #8d2424; content:""; pointer-events:none; }
+.news-image-fallback svg { width:88px; height:88px; color:#d45151; opacity:.82; }
+.news-image-fallback .news-cover-kicker { position:absolute; top:18px; left:20px; color:#c9babb; font-size:10px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+.news-image-fallback .news-cover-note { position:absolute; right:20px; bottom:16px; color:#aaa; font-size:10px; font-weight:500; letter-spacing:0; }
+.news-cover-banjir { background:radial-gradient(circle at 80% 20%,#19232a,#151515 65%); }
+.news-cover-banjir svg { color:#80a6be; }
+.news-cover-iklim { background:radial-gradient(circle at 80% 20%,#1c2921,#151515 65%); }
+.news-cover-iklim svg { color:#8eaf92; }
+.news-cover-cuaca-ekstrem { background:radial-gradient(circle at 80% 20%,#282319,#151515 65%); }
+.news-cover-cuaca-ekstrem svg { color:#c9ae72; }
+.news-description { display:-webkit-box; overflow:hidden; margin:-12px 0 22px; color:var(--muted); font-size:12px; line-height:1.55; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+.news-more { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px 16px; margin-top:28px; }
+.news-more button { padding:11px 17px; border:1px solid var(--red); color:var(--text); background:#9f1d1d; font-size:12px; font-weight:700; cursor:pointer; }
+.news-more button:hover,.news-more button:focus-visible { background:var(--red); }
+.news-more button:disabled { cursor:wait; opacity:.6; }
+.news-more small,.news-more p { color:var(--muted); font-size:11px; }
+.news-more p { flex-basis:100%; margin:0; text-align:center; }
