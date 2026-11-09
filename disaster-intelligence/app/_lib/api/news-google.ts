@@ -4,6 +4,7 @@ import type { FeedStatus, NewsCategory, NewsData, NewsArticle } from "./news-goo
 
 const TTL_MS = 15 * 60_000;
 const STALE_MS = 6 * 60 * 60_000;
+const ARTICLE_MAX_AGE_MS = 14 * 24 * 60 * 60_000;
 const MAX_BYTES = 1_500_000;
 const TIMEOUT_MS = 10_000;
 
@@ -23,6 +24,7 @@ const googleFeeds: FeedSpec[] = [
 ];
 const publisherFeeds: FeedSpec[] = [
   { name: "ANTARA Terkini", provider: "antara", url: "https://www.antaranews.com/rss/terkini.xml", category: "mixed", locale: "id" },
+  { name: "ANTARA Top News", provider: "antara", url: "https://www.antaranews.com/rss/top-news.xml", category: "mixed", locale: "id" },
   { name: "ANTARA Warta Bumi", provider: "antara", url: "https://www.antaranews.com/rss/warta-bumi.xml", category: "mixed", locale: "id" },
   { name: "ANTARA Humaniora", provider: "antara", url: "https://www.antaranews.com/rss/humaniora.xml", category: "mixed", locale: "id" },
 ];
@@ -57,7 +59,11 @@ async function fetchFeed(feed: FeedSpec): Promise<NewsArticle[]> {
   console.info("[news] feed", feed.name, response.status, response.headers.get("content-type"));
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   if (!/xml|rss/i.test(response.headers.get("content-type") ?? "")) throw new Error("unexpected content type");
-  return parseFeed(await readBounded(response), feed);
+  const now = Date.now();
+  return parseFeed(await readBounded(response), feed).filter(article => {
+    const published = Date.parse(article.publishedAt);
+    return published >= now - ARTICLE_MAX_AGE_MS && published <= now + 6 * 60 * 60_000;
+  });
 }
 function getFeed(feed: FeedSpec): Promise<NewsArticle[]> {
   const cached = feedCache.get(feed.url);

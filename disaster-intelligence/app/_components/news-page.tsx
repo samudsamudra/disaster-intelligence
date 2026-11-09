@@ -38,18 +38,32 @@ export function NewsPage() {
   const [moreLoading, setMoreLoading] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const requestEpoch = useRef(0);
+  const lastRequestAt = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    lastRequestAt.current = Date.now();
     fetch(`/api/v1/news?category=${category}&limit=12`, { signal: controller.signal }).then(async response => {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error?.message ?? "Berita gagal dimuat.");
       setData(payload.data);
       setError(null);
-    }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Berita gagal dimuat."); })
+    }).catch(reason => { if (!controller.signal.aborted) { setData(current => current ? { ...current, stale: true, status: "stale", notice: "Berita belum dapat diperbarui. Menampilkan data terakhir yang tersimpan." } : current); setError(reason instanceof Error ? reason.message : "Berita gagal dimuat."); } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [category, retry]);
+
+  useEffect(() => {
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRequestAt.current >= 15 * 60_000) {
+        setLoading(true);
+        setRetry(value => value + 1);
+      }
+    };
+    const timer = window.setInterval(refreshVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refreshVisible); };
+  }, []);
 
   const articles = data?.articles ?? [];
   async function loadMore() {
@@ -67,10 +81,10 @@ export function NewsPage() {
   }
   return <div className="dashboard-shell news-shell"><Sidebar active="news" /><main className="dashboard-main news-main">
     <header className="topbar"><div><p className="eyebrow">INDONESIA · INFORMASI TERKINI</p><h1>Warta Bencana</h1></div><span className="news-header-mark">BERITA & IKLIM</span></header>
-    <section className="news-intro"><div><p className="eyebrow">DARI PENERBIT ASLI</p><h2>Kenali peristiwa.<br /><span>Siapkan langkah.</span></h2><p>Berita bencana alam dan perubahan iklim dari berbagai media. Informasi jurnalistik ini terpisah dari peringatan resmi.</p></div><div className="news-source-summary"><span className="news-live-dot" />{loading ? "Mengambil berita…" : error ? "Sumber belum tersedia" : `Sumber: ${data?.source}`}{data?.stale && <small>Data tersimpan · belum diperbarui</small>}{data?.lastUpdated && !data.stale && <small>Diperbarui {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta", timeZoneName: "short" }).format(new Date(data.lastUpdated))}</small>}</div></section>
+    <section className="news-intro"><div><p className="eyebrow">DARI PENERBIT ASLI</p><h2>Kenali peristiwa.<br /><span>Siapkan langkah.</span></h2><p>Berita bencana alam dan perubahan iklim dari berbagai media. Informasi jurnalistik ini terpisah dari peringatan resmi.</p></div><div className="news-source-summary"><span className="news-live-dot" />{loading ? "Memeriksa berita terbaru…" : error && !data ? "Sumber belum tersedia" : data?.stale ? "Data terakhir tersimpan" : `Sumber: ${data?.source}`}{data?.stale && <small>Belum berhasil diperbarui</small>}{data?.lastUpdated && !data.stale && <small>Diperbarui {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta", timeZoneName: "short" }).format(new Date(data.lastUpdated))} · {data.cache === "hit" ? "cache 15 menit" : "data baru"}</small>}</div></section>
     <div className="news-tabs" role="group" aria-label="Kategori berita">{NEWS_CATEGORIES.map(item => <button key={item} type="button" className={category === item ? "active" : ""} aria-pressed={category === item} onClick={() => { if (item !== category) { requestEpoch.current++; setData(null); setError(null); setLoading(true); setMoreLoading(false); setMoreError(null); setCategory(item); } }}>{labels[item]}</button>)}</div>
     {data?.notice && <p className="news-notice">{data.notice}</p>}
-    {error && <div className="news-state" role="alert"><strong>Berita belum dapat dimuat.</strong><p>{error}</p><button type="button" onClick={() => { requestEpoch.current++; setData(null); setError(null); setLoading(true); setRetry(value => value + 1); }}>Coba lagi</button></div>}
+    {error && <div className="news-state" role="alert"><strong>{data ? "Pembaruan berita gagal." : "Berita belum dapat dimuat."}</strong><p>{error}{data ? " Artikel tersimpan masih ditampilkan." : ""}</p><button type="button" onClick={() => { requestEpoch.current++; setError(null); setLoading(true); setRetry(value => value + 1); }}>Coba lagi</button></div>}
     {loading && !data && <div className="news-grid" aria-label="Memuat berita">{Array.from({ length: 6 }, (_, index) => <div key={index} className="news-card news-skeleton"><div className="news-image" /><div className="news-card-body"><span /><span /><span /><span /></div></div>)}</div>}
     {!loading && !error && !articles.length && <div className="news-state"><strong>Belum ada artikel yang dapat ditampilkan untuk {labels[category]}.</strong><p>{data?.status === "partial" ? "Sebagian feed gagal diperbarui; cakupan berita saat ini terbatas. Coba lagi nanti." : "Feed berhasil diakses, tetapi belum memuat artikel yang cocok. Coba kategori lain atau perbarui nanti."}</p></div>}
     {articles.length > 0 && <div className="news-grid">{articles.map(article => <article className="news-card" key={article.id}><ArticleImage article={article} /><div className="news-card-body"><div className="news-card-meta"><span className="news-category">{labels[article.category]}</span><time dateTime={article.publishedAt}>{dateLabel(article)}</time></div><h2><a href={article.articleUrl} target="_blank" rel="noopener noreferrer">{article.title}</a></h2>{article.description && <p className="news-description">{article.description}</p>}<div className="news-card-footer"><span>{article.source}</span><a href={article.articleUrl} target="_blank" rel="noopener noreferrer" aria-label={`Baca selengkapnya: ${article.title}`}>{article.linkKind === "google-news" ? "Baca via Google News" : "Baca selengkapnya"} <span aria-hidden="true">↗</span></a></div></div></article>)}</div>}
