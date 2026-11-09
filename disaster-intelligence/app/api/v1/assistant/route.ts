@@ -109,6 +109,9 @@ function createFallbackAnswer(
   question = "",
   pageContext?: { title: string; details: string },
 ): string {
+  if (/tindakan|evakuasi|apa yang harus|langkah darurat/i.test(question)) {
+    return "**Langkah awal saat bencana**\n\n1. Jauhi bahaya langsung dan bantu orang di dekat Anda tanpa membahayakan diri sendiri.\n2. Ikuti jalur evakuasi dan arahan petugas setempat. Untuk banjir, menuju tempat lebih tinggi; saat gempa, lindungi kepala selama guncangan lalu keluar setelah aman.\n3. Bawa kebutuhan penting jika memungkinkan, tetapi utamakan keselamatan.\n4. Pantau informasi resmi BMKG, BNPB, atau BPBD dan jangan kembali ke area berbahaya sebelum dinyatakan aman.\n\nJika Anda menyebut jenis bencana dan wilayah, saya dapat menyesuaikan langkahnya. Ini panduan umum, bukan instruksi darurat setempat.";
+  }
   const earthquakes = events.filter(
     (event) =>
       typeof event.magnitude === "number" &&
@@ -171,6 +174,7 @@ ATURAN KEAKURATAN:
 7. Jangan mengklaim telah melakukan pemantauan langsung atau mengambil data terbaru dari internet.
 8. Jika angka/status lokal belum tersedia, sebutkan keterbatasan secara spesifik dalam satu kalimat, lalu berikan informasi yang masih bisa disimpulkan, cara mengecek sumber resmi, atau satu pertanyaan klarifikasi yang berguna. Jangan berhenti pada "saya tidak tahu", tetapi jangan mengganti ketidakpastian dengan dugaan.
 9. Sesuaikan jawaban dengan topik halaman; jangan menjawab pertanyaan cuaca dengan ringkasan gempa yang tidak relevan. Gunakan paragraf pendek, judul seperlunya, dan langkah yang bisa dilakukan pengguna.
+10. Tulis hanya jawaban akhir kepada pengguna dalam bahasa Indonesia. Jangan tampilkan analisis, rencana, draf, daftar aturan, atau proses berpikir internal.
 
 KESELAMATAN:
 - Untuk kondisi darurat, arahkan pengguna mengikuti informasi resmi BMKG, BNPB, BPBD, dan petugas setempat.
@@ -328,7 +332,9 @@ export async function POST(request: Request) {
 
       const answer = response.choices[0]?.message?.content;
 
-      if (typeof answer === "string" && answer.trim().length > 0) {
+      const finalAnswer = typeof answer === "string" ? answer.replace(/<think>[\s\S]*?<\/think>/gi, "").trim() : "";
+      const hasReasoning = /(?:Analyze the Request|Determine the Approach|Drafting the Content|Refining according to Rules|Final Polish|User's Question:|Persona\/Role:)/i.test(finalAnswer);
+      if (finalAnswer && !hasReasoning) {
         console.log("[Assistant] OpenRouter request succeeded", {
           model: response.model,
           usage: response.usage ?? null,
@@ -336,7 +342,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
-          answer: answer.trim(),
+          answer: finalAnswer,
           model: response.model || model,
           meta: {
             source: "OpenRouter",
@@ -344,6 +350,11 @@ export async function POST(request: Request) {
             generatedAt: new Date().toISOString(),
           },
         });
+      }
+
+      if (hasReasoning) {
+        console.warn("[Assistant] Provider returned non-user-facing reasoning; using local answer");
+        break;
       }
 
       console.error("[Assistant] OpenRouter returned an empty answer", {
