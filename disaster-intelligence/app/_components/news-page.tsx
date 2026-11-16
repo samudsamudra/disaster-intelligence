@@ -20,7 +20,7 @@ function ArticleImage({ article }: { article: NewsArticle }) {
       // Remote publisher images have arbitrary hosts; a native image permits a graceful fallback.
       // eslint-disable-next-line @next/next/no-img-element
       <img src={article.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
-    ) : <div className={`news-image-fallback news-cover-${article.category}`} role="img" aria-label={`Ilustrasi ${labels[article.category]}; foto artikel tidak tersedia`}><span className="news-cover-kicker">ILUSTRASI · {labels[article.category]}</span><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={coverPaths[article.category]} /></svg><span className="news-cover-note">Foto artikel tidak tersedia</span></div>}
+    ) : <div className={`news-image-fallback news-cover-${article.category}`} role="img" aria-label={`Ilustrasi ${labels[article.category]}`}><span className="news-cover-kicker">{labels[article.category]}</span><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={coverPaths[article.category]} /></svg></div>}
   </div>;
 }
 
