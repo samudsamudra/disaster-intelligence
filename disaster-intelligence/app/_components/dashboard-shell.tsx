@@ -5,6 +5,8 @@ import { Sidebar } from "./sidebar";
 import { useCallback, useEffect, useState } from "react";
 import { EarthquakeMap } from "./earthquake-map";
 import { useAssistantContext } from "./assistant-context";
+import { useAlertMonitor } from "./alert-monitor";
+import { nearbyAlerts } from "../_lib/local-alert-risk";
 
 type Earthquake = {
   id: string;
@@ -76,41 +78,16 @@ function sourceLabel(status: FeedState["status"]) {
   return "Tidak tersedia";
 }
 
-function distanceInKm(from: UserLocation, to: Earthquake) {
-  const earthRadiusKm = 6371;
-  const latitudeDelta = ((to.latitude - from.latitude) * Math.PI) / 180;
-  const longitudeDelta = ((to.longitude - from.longitude) * Math.PI) / 180;
-  const latitude = (from.latitude * Math.PI) / 180;
-  const targetLatitude = (to.latitude * Math.PI) / 180;
-  const haversine = Math.sin(latitudeDelta / 2) ** 2
-    + Math.cos(latitude) * Math.cos(targetLatitude) * Math.sin(longitudeDelta / 2) ** 2;
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-}
-
 function localRisk(location: UserLocation | null, events: Earthquake[]) {
   if (!location) return null;
-
-  const nearest = events
-    .map((event) => ({ event, distanceKm: distanceInKm(location, event) }))
-    .filter(({ distanceKm }) => distanceKm <= 200)
-    .sort((a, b) => a.distanceKm - b.distanceKm)[0];
-
-  if (!nearest) return { level: "safe" as const, nearest: null };
-  if (nearest.distanceKm <= 100 && nearest.event.magnitude >= 5.5) {
-    return { level: "danger" as const, nearest };
-  }
-  if (nearest.event.magnitude >= 4) {
-    return { level: "warning" as const, nearest };
-  }
-
-  return { level: "safe" as const, nearest };
+  const nearest = nearbyAlerts(location, events)[0] ?? null;
+  return nearest ? { level: nearest.level, nearest } : { level: "safe" as const, nearest: null };
 }
 
 function riskLabel(risk: LocalRisk) {
   if (risk === "danger") return "Bahaya";
   if (risk === "warning") return "Waspada";
-  return "Aman";
+  return "Belum ada peringatan baru";
 }
 
 function Mark({ name }: { name: "grid" | "map" | "bell" | "chevron" | "layers" | "arrow" }) {
@@ -128,6 +105,7 @@ function Mark({ name }: { name: "grid" | "map" | "bell" | "chevron" | "layers" |
 
 export function DashboardShell() {
   const { setPageContext } = useAssistantContext();
+  const monitor = useAlertMonitor();
   const [feed, setFeed] = useState<FeedState>(initialFeedState);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -183,7 +161,10 @@ export function DashboardShell() {
     }
 
     void loadEarthquakes();
-    return () => controller.abort();
+    const refresh = () => { if (document.visibilityState === "visible") void loadEarthquakes(); };
+    const interval = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { controller.abort(); window.clearInterval(interval); document.removeEventListener("visibilitychange", refresh); };
   }, []);
 
   const readDeviceLocation = useCallback(() => {
@@ -225,7 +206,9 @@ export function DashboardShell() {
 
   const freshness = feed.checkedAt ? formatEventTime(feed.checkedAt) : "belum tersedia";
   const sourceStatus = sourceLabel(feed.status);
-  const risk = localRisk(userLocation, feed.events);
+  const deviceLocation = monitor.location ?? userLocation;
+  const currentLocationState = deviceLocation ? "granted" : locationState;
+  const risk = feed.availableSources > 0 && feed.status !== "error" ? localRisk(deviceLocation, feed.events) : null;
   const recentEvents = [...feed.events].sort(
     (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
@@ -246,7 +229,7 @@ export function DashboardShell() {
   }
 
   function requestLocation() {
-    readDeviceLocation();
+    monitor.start();
   }
 
   return <div className="dashboard-shell">
@@ -255,13 +238,14 @@ export function DashboardShell() {
     <main id="main-content" className="dashboard-main">
       <header className="topbar"><div><p className="eyebrow">INDONESIA · MONITORING RISIKO</p><h1>Selamat datang kembali.</h1></div><div className="topbar-actions"><div className="freshness"><span className="status-dot" /> Terakhir diperbarui: {freshness}</div></div></header>
       <section className="hero" id="national-overview" aria-labelledby="overview-title"><div className="hero-copy"><p className="eyebrow">IKHTISAR NASIONAL</p><h2 id="overview-title">Satu pandangan untuk kesiapsiagaan yang lebih cepat.</h2><p>Ruang kerja terpadu untuk memantau laporan kejadian, kondisi wilayah, dan peringatan resmi di seluruh Indonesia.</p></div><div className="source-card"><div className="source-icon"><Mark name="layers" /></div><div><span>Sumber data gempa</span><strong>{sourceStatus}</strong></div><p>{feed.error ?? `${feed.availableSources} sumber resmi terhubung.`}</p></div></section>
+      <section className={`overview-alert-strip ${risk?.level ?? "unknown"}`} aria-label="Peringatan lokasi" role="status"><div><span className="risk-label">PERINGATAN LOKASI · BMKG / USGS</span><strong>{risk ? riskLabel(risk.level) : deviceLocation ? "Data gempa belum tersedia" : "Lokasi belum tersedia"}</strong><p>{risk?.nearest ? `Gempa M ${risk.nearest.event.magnitude.toFixed(1)} sekitar ${Math.round(risk.nearest.distanceKm)} km dari lokasi Anda · ${risk.nearest.event.source}.` : risk ? "Belum ada gempa baru yang terdeteksi dari sumber tersedia dalam ambang 30 menit terakhir." : deviceLocation ? "Status tidak dapat dihitung sampai sumber gempa terhubung." : "Izinkan lokasi agar peringatan di peta mengikuti posisi Anda."}</p></div><div className="overview-alert-actions">{!deviceLocation && locationState !== "requesting" && locationState !== "unsupported" && <button type="button" onClick={requestLocation}>Aktifkan lokasi saya</button>}<a href="#local-monitoring">Lihat peta lokasi</a>{deviceLocation && monitor.notificationPermission === "default" && <button type="button" onClick={monitor.start}>Aktifkan notifikasi browser</button>}{deviceLocation && monitor.notificationPermission === "denied" && <span>Notifikasi browser diblokir; peringatan halaman tetap aktif.</span>}</div></section>
       <section className="indicators" aria-label="Ringkasan indikator">
         <article className="indicator"><span>Gempa terpantau</span><strong>{loading ? "—" : feed.events.length}</strong><small>24 jam terakhir</small></article>
         <article className="indicator"><span>Sumber terhubung</span><strong>{loading ? "—" : `${feed.availableSources}/2`}</strong><small>BMKG dan USGS</small></article>
         <article className="indicator"><span>Status data</span><strong>{loading ? "—" : feed.status === "available" ? "OK" : "!"}</strong><small>{loading ? "memuat data" : sourceStatus}</small></article>
       </section>
       <div className="content-grid">
-        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Status wilayah</span><strong>{locationState === "requesting" ? "Mencari lokasi..." : risk ? riskLabel(risk.level) : "Lokasi belum tersedia"}</strong></div><p>{locationState === "denied" ? "Izin lokasi diblokir di browser. Ubah izin situs untuk membaca kondisi wilayah." : locationState === "unavailable" ? "Posisi perangkat belum ditemukan. Periksa layanan lokasi, lalu coba lagi." : locationState === "unsupported" ? "Browser atau koneksi ini belum mendukung akses lokasi." : locationState === "prompt" ? "Aktifkan lokasi sekali untuk melihat kondisi di sekitar Anda." : risk?.nearest ? `Gempa terdekat ${risk.nearest.distanceKm.toFixed(0)} km dari lokasi Anda.` : risk ? "Belum ada ancaman gempa dalam radius pemantauan." : "Kondisi sekitar belum dapat dihitung tanpa lokasi."}</p>{locationState !== "granted" && locationState !== "requesting" && locationState !== "unsupported" && <button className="location-button" type="button" onClick={requestLocation}>{locationState === "prompt" ? "Aktifkan lokasi saya" : "Coba lagi"}</button>}</div><EarthquakeMap userLocation={userLocation} onEventSelect={selectEvent} selectedEvent={feed.events.find((event) => event.id === selectedEventId) ?? null} /><p className="panel-caption">Sentuh titik merah atau pilih “Lihat” untuk memusatkan peta ke kejadian. Status wilayah berdasarkan gempa dalam radius 200 km.</p></section>
+        <section className="map-panel" id="local-monitoring" aria-labelledby="map-title"><div className="section-heading"><div><p className="eyebrow">PANTAU WILAYAH</p><h2 id="map-title">Area sekitar Anda</h2></div><span className="demo-label">LIVE EARTHQUAKES</span></div><div className={`local-risk-card ${risk?.level ?? "unknown"}`} role="status"><div><span className="risk-label">Peringatan di sekitar Anda</span><strong>{currentLocationState === "requesting" ? "Mencari lokasi..." : risk ? riskLabel(risk.level) : deviceLocation ? "Data gempa belum tersedia" : "Lokasi belum tersedia"}</strong></div><p>{currentLocationState === "denied" ? "Izin lokasi diblokir di browser. Ubah izin situs untuk membaca kondisi wilayah." : currentLocationState === "unavailable" ? "Posisi perangkat belum ditemukan. Periksa layanan lokasi, lalu coba lagi." : currentLocationState === "unsupported" ? "Browser atau koneksi ini belum mendukung akses lokasi." : currentLocationState === "prompt" ? "Aktifkan lokasi untuk membaca kejadian di sekitar Anda." : risk?.nearest ? `Gempa M ${risk.nearest.event.magnitude.toFixed(1)} sekitar ${Math.round(risk.nearest.distanceKm)} km dari Anda · ${risk.nearest.event.source}.` : risk ? "Belum ada kejadian baru yang memenuhi ambang peringatan." : "Kondisi sekitar belum dapat dihitung."}</p>{currentLocationState !== "granted" && currentLocationState !== "requesting" && currentLocationState !== "unsupported" && <button className="location-button" type="button" onClick={requestLocation}>{currentLocationState === "prompt" ? "Aktifkan lokasi saya" : "Coba lagi"}</button>}{risk?.nearest && <button className="location-button" type="button" onClick={() => selectEvent(risk.nearest.event.id)}>Lihat kejadian di peta</button>}</div><EarthquakeMap userLocation={deviceLocation} nearbyAlert={risk?.nearest ?? null} onEventSelect={selectEvent} selectedEvent={feed.events.find((event) => event.id === selectedEventId) ?? null} /><p className="panel-caption">Titik merah menunjukkan kejadian BMKG/USGS. Peringatan memakai gempa 30 menit terakhir: M 4+ dalam 200 km atau M 5,5+ dalam 100 km. Perkiraan ini bukan peringatan resmi atau jaminan keselamatan.</p></section>
         <section className="feed-panel" id="alerts" aria-labelledby="feed-title"><div className="section-heading"><div><p className="eyebrow">AKTIVITAS TERBARU</p><h2 id="feed-title">Gempa bumi</h2></div><span className="demo-label">{feed.status === "partial" ? "DATA SEBAGIAN" : "DATA LANGSUNG"}</span></div>
           <div className="feed-list" aria-live="polite">
             {loading && <p className="panel-caption">Memuat data gempa...</p>}

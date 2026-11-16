@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type MutableRefObject } from "react";
 import * as maplibregl from "maplibre-gl";
+import type { NearbyAlert } from "../_lib/local-alert-risk";
 
 type Earthquake = {
   id: string;
@@ -90,10 +91,12 @@ export function EarthquakeMap({
   userLocation,
   onEventSelect,
   selectedEvent,
+  nearbyAlert,
 }: {
   userLocation: UserLocation | null;
   onEventSelect: (eventId: string) => void;
   selectedEvent: Earthquake | null;
+  nearbyAlert?: NearbyAlert | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -393,6 +396,7 @@ export function EarthquakeMap({
   return (
     <div className="earthquake-map-wrapper">
       {userLocation && <button type="button" className="climate-map-view" onClick={() => mapRef.current?.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 13, essential: true })}>Kembali ke lokasi saya</button>}
+      {nearbyAlert && <div className={`map-alert-overlay ${nearbyAlert.level}`} role="status"><strong>{nearbyAlert.level === "danger" ? "Gempa kuat dekat Anda" : "Gempa dalam radius pantauan"}</strong><span>M {nearbyAlert.event.magnitude.toFixed(1)} · {Math.round(nearbyAlert.distanceKm)} km · {nearbyAlert.event.source}</span><button type="button" onClick={() => onEventSelect(nearbyAlert.event.id)}>Lihat titik gempa</button></div>}
       <div
         ref={containerRef}
         className="earthquake-map"
