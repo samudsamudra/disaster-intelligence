@@ -185,6 +185,11 @@
 .alert-lab-event span { color: #e0d2b9; }
 .alert-lab-panel .earthquake-map-wrapper { margin: 12px 0; height: 330px; }
 .simulation-map-marker { padding: 7px 10px; border: 2px solid #fff; border-radius: 4px; color: #111; background: #e8ac38; box-shadow: 0 4px 20px #000b; font-size: 10px; font-weight: 900; cursor: pointer; }
+.lab-overview-alert { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: -2px 0 18px; padding: 15px 18px; border: 2px solid #d79e32; background: #251b0f; }
+.lab-overview-alert .risk-label { color: #f0bb5d; }.lab-overview-alert strong { display: block; margin: 4px 0; color: #fff; font-size: 17px; }.lab-overview-alert p { margin: 0; color: #e1d0ad; font-size: 12px; line-height: 1.5; }
+.lab-overview-alert a { padding: 9px 11px; border: 1px solid #d79e32; color: #fff; font-size: 11px; font-weight: 700; }.lab-overview-alert a:hover { background: #674615; }
+.lab-map-alert { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 0 0 12px; padding: 11px 13px; border-left: 3px solid #e8ac38; background: #34220e; font-size: 12px; }.lab-map-alert strong { color: #fff; }.lab-map-alert span { color: #e3d4b8; }
+.lab-global-alert { position: fixed; z-index: 99; top: 16px; right: 16px; display: flex; justify-content: space-between; gap: 14px; width: min(400px, calc(100vw - 32px)); padding: 14px; border: 2px solid #e8ac38; color: #fff; background: #30200eeF; box-shadow: 0 12px 32px #000b; }.lab-global-alert strong { font-size: 13px; }.lab-global-alert p { margin: 6px 0 0; color: #e3d4b8; font-size: 11px; }.lab-global-alert button { align-self: flex-start; border: 0; color: #fff; background: transparent; font-size: 22px; cursor: pointer; }
 @media (max-width: 768px) { .earthquake-map-wrapper { height: 380px; } }
 
 :root { --bg: #090909; --surface: #101010; --surface-raised: #181818; --border: #303030; --muted: #9a9a9a; --text: #f5f5f5; --red: #e32626; }

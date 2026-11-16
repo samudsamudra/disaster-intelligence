@@ -5,6 +5,7 @@ import "./globals.css";
 import { AssistantContextProvider } from "./_components/assistant-context";
 import { FloatingDisasterBot } from "./_components/floating-disaster-bot";
 import { AlertMonitorProvider } from "./_components/alert-monitor";
+import { AlertLocationLabProvider } from "./_components/alert-location-lab";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,8 +28,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <AssistantContextProvider>
           <AlertMonitorProvider>
-            {children}
-            <FloatingDisasterBot />
+            <AlertLocationLabProvider>
+              {children}
+              <FloatingDisasterBot />
+            </AlertLocationLabProvider>
           </AlertMonitorProvider>
         </AssistantContextProvider>
       </body>
