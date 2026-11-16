@@ -90,10 +90,12 @@ export function EarthquakeMap({
   userLocation,
   onEventSelect,
   selectedEvent,
+  simulationPoint,
 }: {
   userLocation: UserLocation | null;
   onEventSelect: (eventId: string) => void;
   selectedEvent: Earthquake | null;
+  simulationPoint?: { latitude: number; longitude: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -102,6 +104,7 @@ export function EarthquakeMap({
   const selectedFeatureIdRef = useRef<string | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const simulationMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
     onEventSelectRef.current = onEventSelect;
@@ -337,6 +340,8 @@ export function EarthquakeMap({
       popupAtSetup?.remove();
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
+      simulationMarkerRef.current?.remove();
+      simulationMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -389,6 +394,23 @@ export function EarthquakeMap({
     focusCamera(map, event.longitude, event.latitude);
     showEventPopup(map, popupRef, event);
   }, [selectedEvent]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    simulationMarkerRef.current?.remove();
+    simulationMarkerRef.current = null;
+    if (!map || !simulationPoint || !Number.isFinite(simulationPoint.latitude) || !Number.isFinite(simulationPoint.longitude)) return;
+    const element = document.createElement("div");
+    element.className = "simulation-map-marker";
+    element.textContent = "SIMULASI";
+    element.setAttribute("aria-label", "Titik gempa simulasi, bukan kejadian nyata");
+    simulationMarkerRef.current = new maplibregl.Marker({ element })
+      .setLngLat([simulationPoint.longitude, simulationPoint.latitude])
+      .setPopup(new maplibregl.Popup({ offset: 16 }).setText("SIMULASI · Gempa M 5,8 sekitar 1 km dari lokasi Anda. Bukan kejadian nyata."))
+      .addTo(map);
+    map.flyTo({ center: [simulationPoint.longitude, simulationPoint.latitude], zoom: 12, essential: true });
+    return () => { simulationMarkerRef.current?.remove(); simulationMarkerRef.current = null; };
+  }, [simulationPoint]);
 
   return (
     <div className="earthquake-map-wrapper">
