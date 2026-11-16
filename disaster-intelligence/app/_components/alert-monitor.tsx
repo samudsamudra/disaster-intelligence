@@ -12,12 +12,10 @@ type MonitorContext = {
   latest: NearbyAlert | null;
   message: string;
   start: () => void;
-  stop: () => void;
   dismiss: () => void;
 };
 
 const AlertMonitorContext = createContext<MonitorContext | null>(null);
-const ENABLED_KEY = "pantau-alert-monitor-enabled";
 const SEEN_KEY = "pantau-alert-seen-events";
 
 export async function showBrowserNotification(alert: NearbyAlert) {
@@ -52,33 +50,42 @@ export function AlertMonitorProvider({ children }: { children: ReactNode }) {
     setLocationStatus("waiting");
     navigator.geolocation.getCurrentPosition(({ coords }) => {
       const next = { latitude: coords.latitude, longitude: coords.longitude };
-      if (!validLocation(next)) { setLocationStatus("unavailable"); return; }
+      if (!validLocation(next)) { setEnabled(false); setLocationStatus("unavailable"); return; }
       setLocation(next);
+      setEnabled(true);
       setLocationStatus("ready");
     }, error => {
       setLocation(null);
+      setEnabled(false);
       setLocationStatus(error.code === 1 ? "denied" : "unavailable");
     }, { maximumAge: 300_000, timeout: 10_000, enableHighAccuracy: false });
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const active = localStorage.getItem(ENABLED_KEY) === "1";
-      setEnabled(active);
-      setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
-      if (!active) return;
-      if (!navigator.permissions) { setLocationStatus("prompt"); return; }
-      navigator.permissions.query({ name: "geolocation" }).then(result => {
-        if (result.state === "granted") readLocation();
-        else setLocationStatus(result.state === "denied" ? "denied" : "prompt");
-      }).catch(() => setLocationStatus("prompt"));
-    });
+    let mounted = true;
+    let permission: PermissionStatus | null = null;
+    queueMicrotask(() => { if (mounted) setNotificationPermission("Notification" in window ? Notification.permission : "unsupported"); });
+    if (!navigator.permissions) { queueMicrotask(() => { if (mounted) setLocationStatus("prompt"); }); return () => { mounted = false; }; }
+    const update = () => {
+      if (!mounted || !permission) return;
+      if (permission.state === "granted") readLocation();
+      else {
+        setEnabled(false);
+        setLocation(null);
+        setLocationStatus(permission.state === "denied" ? "denied" : "prompt");
+      }
+    };
+    navigator.permissions.query({ name: "geolocation" }).then(result => {
+      if (!mounted) return;
+      permission = result;
+      permission.addEventListener("change", update);
+      update();
+    }).catch(() => { if (mounted) setLocationStatus("prompt"); });
+    return () => { mounted = false; permission?.removeEventListener("change", update); };
   }, [readLocation]);
 
   function start() {
-    setEnabled(true);
-    localStorage.setItem(ENABLED_KEY, "1");
-    // Both permission requests start in the same user gesture.
+    // Request permissions only after a user gesture; monitoring starts once location is known.
     readLocation();
     if (window.isSecureContext && "Notification" in window) {
       void Notification.requestPermission().then(result => {
@@ -89,14 +96,6 @@ export function AlertMonitorProvider({ children }: { children: ReactNode }) {
       setNotificationPermission("unsupported");
       setMessage("Browser ini tidak mendukung notifikasi sistem. Peringatan dalam halaman tetap tersedia.");
     }
-  }
-
-  function stop() {
-    setEnabled(false);
-    setLocation(null);
-    setLatest(null);
-    localStorage.removeItem(ENABLED_KEY);
-    setMessage("Pemantauan dihentikan.");
   }
 
   const check = useCallback(async (signal?: AbortSignal) => {
@@ -128,11 +127,17 @@ export function AlertMonitorProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!enabled || !location) return;
     const controller = new AbortController();
-    const refresh = () => { if (document.visibilityState === "visible") void check(controller.signal); };
+    let checking = false;
+    const refresh = () => {
+      if (checking) return;
+      checking = true;
+      void check(controller.signal).finally(() => { checking = false; });
+    };
+    const refreshOnFocus = () => { if (document.visibilityState === "visible") refresh(); };
     refresh();
     const interval = window.setInterval(refresh, 60_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => { controller.abort(); window.clearInterval(interval); document.removeEventListener("visibilitychange", refresh); };
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => { controller.abort(); window.clearInterval(interval); document.removeEventListener("visibilitychange", refreshOnFocus); };
   }, [enabled, location, check]);
 
   useEffect(() => {
@@ -144,7 +149,7 @@ export function AlertMonitorProvider({ children }: { children: ReactNode }) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [enabled, location]);
 
-  return <AlertMonitorContext.Provider value={{ enabled, location, locationStatus, notificationPermission, latest, message, start, stop, dismiss: () => setLatest(null) }}>{children}{latest && <div className="global-alert" role="alert"><div><strong>{latest.level === "danger" ? "Gempa kuat dekat lokasi Anda" : "Gempa dalam radius pantauan"}</strong><p>M {latest.event.magnitude.toFixed(1)} · sekitar {Math.round(latest.distanceKm)} km · {latest.event.source} · {latest.event.place}</p><small>Perkiraan berdasarkan magnitudo dan jarak. Ikuti arahan resmi dan kondisi sekitar.</small></div><button type="button" onClick={() => setLatest(null)} aria-label="Tutup peringatan">×</button></div>}</AlertMonitorContext.Provider>;
+  return <AlertMonitorContext.Provider value={{ enabled, location, locationStatus, notificationPermission, latest, message, start, dismiss: () => setLatest(null) }}>{children}{latest && <div className="global-alert" role="alert"><div><strong>{latest.level === "danger" ? "Gempa kuat dekat lokasi Anda" : "Gempa dalam radius pantauan"}</strong><p>M {latest.event.magnitude.toFixed(1)} · sekitar {Math.round(latest.distanceKm)} km · {latest.event.source} · {latest.event.place}</p><small>Perkiraan berdasarkan magnitudo dan jarak. Ikuti arahan resmi dan kondisi sekitar.</small></div><button type="button" onClick={() => setLatest(null)} aria-label="Tutup peringatan">×</button></div>}</AlertMonitorContext.Provider>;
 }
 
 export function useAlertMonitor() {
