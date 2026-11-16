@@ -5,7 +5,7 @@ import { Sidebar } from "./sidebar";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAssistantContext } from "./assistant-context";
-import { AlertNotificationTest } from "./alert-notification-test";
+import { AlertMonitorControls } from "./alert-monitor-controls";
 
 type Earthquake = {
   id: string;
@@ -55,7 +55,7 @@ export function AlertsPage() {
         <p className="eyebrow">PERINGATAN TERKINI</p>
         <h1>Semua kejadian terpantau</h1>
         <p className="standalone-intro">Daftar kejadian dari sumber BMKG dan USGS. Data dimuat bertahap agar halaman tetap ringan.</p>
-        <AlertNotificationTest />
+        <AlertMonitorControls />
         <div className="standalone-list" aria-live="polite">
           {loading && <p className="panel-caption">Memuat peringatan...</p>}
           {!loading && currentEvents.length === 0 && <p className="panel-caption">Belum ada data kejadian.</p>}
