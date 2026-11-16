@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import { AssistantContextProvider } from "./_components/assistant-context";
 import { FloatingDisasterBot } from "./_components/floating-disaster-bot";
+import { AlertMonitorProvider } from "./_components/alert-monitor";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,8 +26,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="id" data-scroll-behavior="smooth" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <AssistantContextProvider>
-          {children}
-          <FloatingDisasterBot />
+          <AlertMonitorProvider>
+            {children}
+            <FloatingDisasterBot />
+          </AlertMonitorProvider>
         </AssistantContextProvider>
       </body>
     </html>

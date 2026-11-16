@@ -71,7 +71,6 @@
 .news-image-fallback::after { position:absolute; inset:0; border-top:2px solid #8d2424; content:""; pointer-events:none; }
 .news-image-fallback svg { width:88px; height:88px; color:#d45151; opacity:.82; }
 .news-image-fallback .news-cover-kicker { position:absolute; top:18px; left:20px; color:#c9babb; font-size:10px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
-.news-image-fallback .news-cover-note { position:absolute; right:20px; bottom:16px; color:#aaa; font-size:10px; font-weight:500; letter-spacing:0; }
 .news-cover-banjir { background:radial-gradient(circle at 80% 20%,#19232a,#151515 65%); }
 .news-cover-banjir svg { color:#80a6be; }
 .news-cover-iklim { background:radial-gradient(circle at 80% 20%,#1c2921,#151515 65%); }
